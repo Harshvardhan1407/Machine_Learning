@@ -6,3 +6,4 @@ ipykernel
 scipy
 scikit-learn
 flask
+requests
