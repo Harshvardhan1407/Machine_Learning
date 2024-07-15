@@ -1,4 +1,7 @@
+matplotlib
 numpy
 pandas
-matplotlib
 python-dotenv
+ipykernel 
+scipy
+scikit-learn
