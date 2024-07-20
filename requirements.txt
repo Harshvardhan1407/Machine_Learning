@@ -8,3 +8,4 @@ scikit-learn
 flask
 requests
 category_encoders
+seaborn
