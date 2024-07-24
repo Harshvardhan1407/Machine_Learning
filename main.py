@@ -20,7 +20,7 @@ STAGE_NAME = "Data Transformation"
 try:
     logger.info(f"-----------Stage {STAGE_NAME} Started------------")
     obj = DataTransformation()
-    obj.initiate_data_transformation()
+    obj.initiate_data_transformation(data)
     logger.info(f"-----------Stage {STAGE_NAME} Completed------------")
 except Exception as e:
     logger.exception(e)
