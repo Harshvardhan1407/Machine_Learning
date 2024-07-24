@@ -2,3 +2,5 @@
 .env
 /Datasets
 __pycache__
+/notebooks
+ml.log
