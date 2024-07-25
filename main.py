@@ -1,15 +1,15 @@
 from logger import logger
 from pipeline.data_ingestion import DataIngestion
 from pipeline.data_transformation import DataTransformation
-logger.info("We are printing the logs here!!!")
+logger.info(f"----------We are printing the logs here!!!".ljust(60, '-'))
 
 STAGE_NAME = "Data Ingestion"
 try:
-    logger.info(f"-----------Stage {STAGE_NAME} Started------------")
+    logger.info(f"----------Stage {STAGE_NAME} Started".ljust(60, '-'))
     obj = DataIngestion()
     data = obj.initiateDataIngestion()
     
-    logger.info(f"-----------Stage {STAGE_NAME} Completed-----------")
+    logger.info(f"----------Stage {STAGE_NAME} Completed".ljust(60, '-'))
 
 except Exception as e:
     logger.exception(e)
@@ -18,10 +18,10 @@ except Exception as e:
 STAGE_NAME = "Data Transformation"
 
 try:
-    logger.info(f"-----------Stage {STAGE_NAME} Started------------")
+    logger.info(f"----------Stage {STAGE_NAME} Started".ljust(60, '-'))
     obj = DataTransformation()
     obj.initiate_data_transformation(data)
-    logger.info(f"-----------Stage {STAGE_NAME} Completed------------")
+    logger.info(f"----------Stage {STAGE_NAME} Completed".ljust(60, '-'))
 except Exception as e:
     logger.exception(e)
     raise e
