@@ -1,0 +1,10 @@
+/mlenv
+.env
+/Datasets
+__pycache__
+/notebooks
+ml.log
+test.ipynb
+preprocessing_pipeline.pkl
+encoding_decoding_pair.json
+/pipeline/__pycache__
