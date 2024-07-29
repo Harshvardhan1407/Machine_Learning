@@ -9,4 +9,4 @@ class ModelEvaluation():
         try:
             pass
         except Exception as e:
-            logger.info()
+            logger.info(f"----------error in model evaluation".ljust(60, '-'))
