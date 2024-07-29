@@ -36,12 +36,12 @@ except Exception as e:
     logger.info("error at model training stage")
 
 
-STAGE_NAME = "Model evaluation"
+# STAGE_NAME = "Model evaluation"
 
-try:
-    logger.info(f"----------Stage {STAGE_NAME} Started".ljust(60, '-'))
-    obj = ModelEvaluation()
-    obj.initiate_model_evaluation(tranformed_data)
-    logger.info(f"----------Stage {STAGE_NAME} Completed".ljust(60, '-'))
-except Exception as e:
-    logger.info("error at model evaluation stage")
+# try:
+#     logger.info(f"----------Stage {STAGE_NAME} Started".ljust(60, '-'))
+#     obj = ModelEvaluation()
+#     obj.initiate_model_evaluation(tranformed_data)
+#     logger.info(f"----------Stage {STAGE_NAME} Completed".ljust(60, '-'))
+# except Exception as e:
+#     logger.info("error at model evaluation stage")
