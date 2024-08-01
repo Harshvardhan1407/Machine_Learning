@@ -52,23 +52,9 @@ class ModelTraining():
             # tree_rmse_scores = np.sqrt(-scores)
             # forest_reg = RandomForestRegressor()
             # forest_reg.fit(X_train, y_train)
-           
-            param_grid_lr = {
-                'fit_intercept': [True, False]
-            }
 
-            param_grid_dtr = {
-                'max_depth': [None, 10, 20, 30],
-                'min_samples_split': [2, 10, 20],
-                'min_samples_leaf': [1, 5, 10]
-            }
-
-            param_grid_rfr = {
-                'n_estimators': [100, 200, 300],
-                'max_depth': [None, 10, 20, 30],
-                'min_samples_split': [2, 10, 20],
-                'min_samples_leaf': [1, 5, 10]
-            }
+#  linerar regression
+            param_grid_lr = {'fit_intercept': [True, False]}
 
             # Initialize the models
             lr = LinearRegression()
@@ -85,7 +71,12 @@ class ModelTraining():
             print(f"Linear Regression: MAE={mae_lr}, MSE={mse_lr}, R2={r2_lr}")
 
 
-
+# decision tree regression
+            param_grid_dtr = {
+                'max_depth': [None, 10, 20, 30],
+                'min_samples_split': [2, 10, 20],
+                'min_samples_leaf': [1, 5, 10]
+            }
 
             dtr = DecisionTreeRegressor(random_state=42)
             grid_search_dtr = GridSearchCV(estimator=dtr, param_grid=param_grid_dtr, cv=5, scoring='r2')
@@ -100,6 +91,13 @@ class ModelTraining():
             r2_dtr = r2_score(y_test, y_pred_dtr)
             print(f"Decision Tree Regressor: MAE={mae_dtr}, MSE={mse_dtr}, R2={r2_dtr}")
 
+# random forest regression
+            param_grid_rfr = {
+                'n_estimators': [100, 200, 300],
+                'max_depth': [None, 10, 20, 30],
+                'min_samples_split': [2, 10, 20],
+                'min_samples_leaf': [1, 5, 10]
+            }
 
             rfr = RandomForestRegressor(random_state=42)
             # Initialize GridSearchCV
