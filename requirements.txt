@@ -9,3 +9,5 @@ flask
 requests
 category_encoders
 seaborn
+pyarrow
+fastparquet
