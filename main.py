@@ -13,7 +13,7 @@ try:
     logger.info(f"----------Stage {STAGE_NAME} Completed".ljust(60, '-'))
 
 except Exception as e:
-    logger.info("error at ingestion stage")
+    logger.error(f"error at ingestion stage: {e}",exc_info=True)
 
 STAGE_NAME = "Data Transformation"
 try:
@@ -22,18 +22,18 @@ try:
     tranformed_data = obj.initiate_data_transformation(data)
     logger.info(f"----------Stage {STAGE_NAME} Completed".ljust(60, '-'))
 except Exception as e:
-    logger.info("error at transformation stage")
+    logger.error(f"error at transformation stage: {e}",exc_info=True)
 
 
-STAGE_NAME = "Model Training"
+# STAGE_NAME = "Model Training"
 
-try:
-    logger.info(f"----------Stage {STAGE_NAME} Started".ljust(60, '-'))
-    obj = ModelTraining()
-    obj.initiate_model_training(tranformed_data)
-    logger.info(f"----------Stage {STAGE_NAME} Completed".ljust(60, '-'))
-except Exception as e:
-    logger.info("error at model training stage")
+# try:
+#     logger.info(f"----------Stage {STAGE_NAME} Started".ljust(60, '-'))
+#     obj = ModelTraining()
+#     obj.initiate_model_training(tranformed_data)
+#     logger.info(f"----------Stage {STAGE_NAME} Completed".ljust(60, '-'))
+# except Exception as e:
+#     logger.error(f"error at model training stage: {e}",exc_info=True)
 
 
 # STAGE_NAME = "Model evaluation"
@@ -44,4 +44,4 @@ except Exception as e:
 #     obj.initiate_model_evaluation(tranformed_data)
 #     logger.info(f"----------Stage {STAGE_NAME} Completed".ljust(60, '-'))
 # except Exception as e:
-#     logger.info("error at model evaluation stage")
+#     logger.error(f"error at model evaluation stage: {e}",exc_info=True)
