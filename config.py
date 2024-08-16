@@ -1,2 +1,5 @@
-data_path =  r"Datasets\flight_data.csv"
-problem_type = "regression"
+# data_path = r"Datasets\flight_data.csv"
+# data_path = r"Datasets/data_whole.parquet"
+data_path = r"Datasets/surbhi.csv"
+problem_type = "regression"  #"""classification"""
+kind = "load_forecasting" #"flight"
