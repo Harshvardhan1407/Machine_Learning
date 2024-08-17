@@ -18,7 +18,7 @@ class DataIngestion:
             
             if file_extension == ".json":
                 data = pd.read_json(data_path)
-
+            logger.info(f"----------file read {file_name}{file_extension}".ljust(60, '-'))
             logger.info(f"----------data read".ljust(60, '-'))
             logger.info(f"----------columns:{tuple(data.columns)}".ljust(60, '-'))
             logger.info(f"----------shape:{data.shape}".ljust(60, '-'))
