@@ -11,3 +11,6 @@ category_encoders
 seaborn
 pyarrow
 fastparquet
+tensorflow
+tensorflow-hub
+tensorflow-datasets
