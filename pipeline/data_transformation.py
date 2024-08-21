@@ -6,8 +6,13 @@ try:
     import os
     import pickle
     import json
+    from pymongo import MongoClient
+    from dotenv import load_dotenv
+    load_dotenv()
+    import holidays
+
     from sklearn.cluster import DBSCAN
-    from common import add_lags, create_features
+    from common import add_lags, create_features, get_database, holidays_list
     import matplotlib.pyplot as plt
     from sklearn.model_selection import train_test_split
     from sklearn.model_selection import StratifiedShuffleSplit
@@ -17,6 +22,15 @@ try:
     from sklearn.preprocessing import StandardScaler
     from sklearn.preprocessing import MinMaxScaler
     from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+    from concurrent.futures import ThreadPoolExecutor
+    import os
+    import concurrent
+    import pandas as pd
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    from bson import ObjectId
+
     pd.set_option('display.max_columns', None)
 
 except ImportError as e:
@@ -73,100 +87,34 @@ def parquet_data_transforamtion(data):
         logger.info(f"----------parquet data transformation".ljust(60, '-'))
         df = data.copy()
         df.drop(['_id'],axis=1, inplace=True)
-        logger.info(f"object type columns:{[col for col in df.columns if df[col].dtype == object]}".ljust(60, '-')) 
+        # logger.info(f"object type columns:{[col for col in df.columns if df[col].dtype == object]}".ljust(60, '-')) 
+
+        # date time handling and index creation
         df["creation_time"] = pd.to_datetime(df['creation_time'])
         df.set_index(['creation_time'],drop= True, inplace= True)
-        
-        # sensor_id column conversion
-        label_encoder = LabelEncoder()
-        df['label_sensor_id'] = label_encoder.fit_transform(df['sensor_id'])
-        
-        sensor_ids = tuple(df['sensor_id'].unique())
-        label_sensor_ids = tuple(df['label_sensor_id'].unique())
-        json_data = [
-            {str(sensor_id): str(label_sensor_id)}
-            for sensor_id, label_sensor_id in zip(sensor_ids, label_sensor_ids)
-        ]
-        json_string = json.dumps(json_data)
-        # print(1)
-        # json_string = json.dumps(json_data)
-        # Save the JSON data to a file
-        with open('encoding_decoding_pair.json', 'w') as file:
-            file.write(json_string)
-        df.drop('sensor_id',axis=1 ,inplace=True)
-        logger.info(f"columns{df.columns}")
+        df.sort_index(inplace= True)
 
-        clean_data = []
-        for s_id, data in df.groupby('label_sensor_id'):
-            s_df = data.copy()
-            
-            if len(s_df) > 3000:
-                description = s_df.describe()
-                Q2 = description.loc['50%', 'opening_KWh']
-                if Q2 < 1:
-                    continue
-                # outage situation
-                s_df.loc[s_df['opening_KWh'] == 0, "opening_KWh"] = np.nan
-                s_df.loc[s_df['opening_KWh'].first_valid_index():]
-                s_df.bfill(inplace=True)
+        # sensor_id_list = df['sensor_id'].unique()
 
-                # missing packet
-                sensor_df = s_df.resample(rule="15min").asfreq()
-                sensor_df.interpolate(method="linear", inplace=True)
+        start_date, end_date = df.first_valid_index(), df.last_valid_index()
 
-                # no consumption / same reading
-                if sensor_df['opening_KWh'].nunique() < 10:
-                    continue
+        # Generate the holiday list
+        holiday = holidays_list(start_date, end_date)
+        # Convert the holiday list to a pandas DatetimeIndex
+        if holiday is not None:
+            holiday_dates = pd.to_datetime(holiday)
+            df['is_holiday'] = df.index.isin(holiday_dates).astype(int)
+        else:
+            logger.info("Holiday list generation failed.")
+        df.reset_index(inplace=True)
+        site_df = pd.read_json(r"paired_sensor_site_data.json")
+        df_merged = df.merge(site_df, on='sensor_id', how='left')
 
-                # previous value of opening_KWh
-                sensor_df['prev_KWh'] = sensor_df['opening_KWh'].shift(1)
-                sensor_df.dropna(inplace=True)
-                if len(sensor_df[sensor_df['prev_KWh'] > sensor_df['opening_KWh']]) > 25:
-                    continue
+        logger.info(f"columns: {df_merged.columns}")
+        df_merged["creation_time"] = pd.to_datetime(df_merged['creation_time'])
+        df_merged.set_index(['creation_time'],drop= True, inplace= True)
+        print(df_merged.info())
 
-                # consumed unit
-                sensor_df['consumed_unit'] = sensor_df['opening_KWh'] - sensor_df['prev_KWh']
-                sensor_df.loc[sensor_df['consumed_unit'] < 0, "opening_KWh"] = sensor_df["prev_KWh"]
-                sensor_df.loc[sensor_df['consumed_unit'] < 0, "consumed_unit"] = 0
-
-                if sensor_df['consumed_unit'].nunique() < 10:
-                    continue
-
-                # eliminating id's based on slope
-                numeric_index = pd.to_numeric(sensor_df.index)
-                correlation = np.corrcoef(numeric_index, sensor_df['opening_KWh'])[0, 1]
-                coeffs = np.polyfit(numeric_index, sensor_df['opening_KWh'], 1)
-
-                slope = coeffs[0]
-                if not np.abs(correlation) > 0.8 and slope > 0:
-                    continue
-
-                # outlier detection
-                epsilon = 11
-                min_samples = 3
-                dbscan = DBSCAN(eps=epsilon, min_samples=min_samples)
-                # outlier_labels = dbscan.fit_predict(s_df[['consumed_unit']])
-                # s_df['outlier'] = outlier_labels
-                sensor_df['db_outlier'] = dbscan.fit_predict(sensor_df[['consumed_unit']])
-
-                # print('no. of outliers were:',len(s_df[s_df['db_outlier']==-1]))
-                sensor_df.loc[sensor_df['db_outlier'] == -1, 'consumed_unit'] = np.nan
-                #  s_df.loc[outlier_dict[indices[0]].index,'consumed_unit'] = np.nan
-                sensor_df.bfill(inplace=True)
-
-                # sensor_df.reset_index(inplace=True)
-                dfresample = add_lags(sensor_df)
-                dfresample = create_features(dfresample)
-                dfresample.reset_index(inplace=True)
-                logger.info(f"sensor_id{s_id}done")
-                clean_data.append(dfresample)
-        # corr_matrix = df.corr()
-        # # Plot the correlation matrix
-        # plt.figure(figsize=(10, 8))
-        # sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt=".2f")
-        # plt.title('Correlation Matrix')
-        # plt.show()
-        return clean_data
 
     except Exception as e:
         logger.error(f"error in load profile data transformation:{e}",exc_info=True)
@@ -222,3 +170,93 @@ def image_data_transformation(data):
         logger.error(f"error in image data transformation:{e}",exc_info=True)
 
 ###########################---- ----#########################################################################################
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# import mongo_query.sensor_ids as sensor_ids
+# from config.db_port import get_database
+
+client = MongoClient(os.getenv("mongo_url"),compressors='zstd',zlibCompressionLevel=9)
+database_name = os.getenv("database_name")
+db = get_database(client,database_name)
+sensor = db.load_profile_jdvvnl
+
+def data_fetch(sensor_id, site_id):
+    try:
+        from_id = f"{sensor_id}-2024-01-01 00:00:00"
+        to_id = f"{sensor_id}-2024-03-31 23:59:59"
+        query = {"_id": {"$gte": from_id, "$lt": to_id}}
+
+        results = list(sensor.find(query))
+        for doc in results:
+            if '_id' in doc:
+                doc['_id'] = str(doc['_id'])
+
+        if results:
+            df = datatransformation.init_transformation(results, site_id)
+            if df is None:
+                logger.info(f"Nothing transformed for sensor_id: {sensor_id}")
+            else:
+                logger.info(f"Fetched and transformed {len(df)} records for sensor_id: {sensor_id}")
+            return df
+        else:
+            logger.info(f"No records found for sensor_id: {sensor_id}")
+            return None
+
+    except Exception as e:
+        logger.error(f"Error fetching data for sensor_id {sensor_id}: {e}", exc_info=True)
+        return None
+
+def fetch_data_for_sensors(circle_id, output_dir="sensor_data"):
+    os.makedirs(output_dir, exist_ok=True)
+
+    sensors = sensor_ids.sensor_ids(circle_id)
+    sensorids = [doc["id"] for doc in sensors]
+    site_ids = [doc["site_id"] for doc in sensors]
+
+    all_dicts = []
+    with ThreadPoolExecutor() as executor:
+        futures = {executor.submit(data_fetch, sensor_id, site_id): (sensor_id, site_id) for sensor_id, site_id in zip(sensorids, site_ids)}
+
+        for future in concurrent.futures.as_completed(futures):
+            dicts = future.result()
+            if dicts is not None and len(dicts) > 0:
+                all_dicts.extend(dicts)
+
+    if all_dicts:
+        combined_df = pd.DataFrame(all_dicts)
+        
+        # Convert all object type columns to strings if necessary
+        combined_df = combined_df.applymap(lambda x: str(x) if isinstance(x, ObjectId) else x)
+
+        table = pa.Table.from_pandas(combined_df)
+        pq.write_table(table, os.path.join(output_dir, f"{circle_id}_data.parquet"))
+        
+        logger.info(f"Saved data for circle_id: {circle_id}")
+        return "saved"
+    else:
+        logger.info(f"No data to save for circle_id: {circle_id}")
+        return "no data"
+
