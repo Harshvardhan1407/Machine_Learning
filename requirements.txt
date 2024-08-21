@@ -1,3 +1,5 @@
+# to install : pip install -r requirements.txt
+
 matplotlib
 numpy
 pandas
@@ -14,3 +16,6 @@ fastparquet
 tensorflow
 tensorflow-hub
 tensorflow-datasets
+pymongo
+zstandard
+holidays
