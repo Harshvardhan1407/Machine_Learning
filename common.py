@@ -77,9 +77,13 @@ def data_validation_filtering(dfs):
     except Exception as e:
         print("error in validation :",e,e.args())
 
-def kWh_validation(s_df):
+def data_validation(collection,label_sensor_id,s_df):
     try:
-        return "success"
+        s_df["creation_time"] = pd.to_datetime(s_df['creation_time'])
+        s_df.set_index(['creation_time'],drop= True, inplace= True)
+
+        site_id = s_df['site_id'].unique()[0]
+        # label_sensor_id = s_df['label_sensor_id'].unique()[0]
         if len(s_df) > 3000:
             description = s_df.describe()
             Q2 = description.loc['50%', 'opening_KWh']
@@ -91,19 +95,19 @@ def kWh_validation(s_df):
             s_df.bfill(inplace=True)
 
             # missing packet
-            sensor_df = s_df.resample(rule="15min").asfreq()
+            sensor_df = s_df[['opening_KWh']].resample(rule="15min").asfreq()
             sensor_df = sensor_df.infer_objects(copy=False)
             sensor_df.interpolate(method="linear", inplace=True)
 
             # no consumption / same reading
             if sensor_df['opening_KWh'].nunique() < 10:
-                continue
+                return None
 
             # previous value of opening_KWh
             sensor_df['prev_KWh'] = sensor_df['opening_KWh'].shift(1)
             sensor_df.dropna(inplace=True)
-            if len(sensor_df[sensor_df['prev_KWh'] > sensor_df['opening_KWh']]) > 25:
-                continue
+            # if len(sensor_df[sensor_df['prev_KWh'] > sensor_df['opening_KWh']]) > 25:
+            #     return None
 
             # consumed unit
             sensor_df['consumed_unit'] = sensor_df['opening_KWh'] - sensor_df['prev_KWh']
@@ -111,7 +115,7 @@ def kWh_validation(s_df):
             sensor_df.loc[sensor_df['consumed_unit'] < 0, "consumed_unit"] = 0
 
             if sensor_df['consumed_unit'].nunique() < 10:
-                continue
+                return None
 
             # eliminating id's based on slope
             numeric_index = pd.to_numeric(sensor_df.index)
@@ -120,7 +124,7 @@ def kWh_validation(s_df):
 
             slope = coeffs[0]
             if not np.abs(correlation) > 0.8 and slope > 0:
-                continue
+                return None
 
             # outlier detection
             epsilon = 11
@@ -134,57 +138,47 @@ def kWh_validation(s_df):
             sensor_df.loc[sensor_df['db_outlier'] == -1, 'consumed_unit'] = np.nan
             #  s_df.loc[outlier_dict[indices[0]].index,'consumed_unit'] = np.nan
             sensor_df.bfill(inplace=True)
-
+            sensor_df.drop(['opening_KWh', 'prev_KWh','db_outlier'],axis=1,inplace= True)
             # sensor_df.reset_index(inplace=True)
             dfresample = add_lags(sensor_df)
             dfresample = create_features(dfresample)
+            start_date,end_date = dfresample.first_valid_index(), dfresample.last_valid_index()
             dfresample.reset_index(inplace=True)
-            logger.info(f"sensor_id{s_id}done")
-            clean_data.append(dfresample)
-        # corr_matrix = df.corr()
-        # # Plot the correlation matrix
-        # plt.figure(figsize=(10, 8))
-        # sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', fmt=".2f")
-        # plt.title('Correlation Matrix')
-        # plt.show()
-        # if df2.empty is False:
-    
-        return clean_data
-        ##########################################################################
-        clean_df.loc[clean_df['kWh'] == 0, "kWh"] = np.nan
-        clean_df.loc[clean_df['kWh'].first_valid_index():]
-        clean_df.bfill(inplace=True)
+            dfresample['label_sensor_id'] = label_sensor_id
 
-        # missing packet
-        sensor_df = clean_df.resample(rule="1H").bfill()
-        if sensor_df.isna().sum().sum() !=0:
-            sensor_df.interpolate(method="linear", inplace=True)
+            logger.info(f"sensor_id{label_sensor_id}done")
+            # print("site_id:",site_id)
+            if dfresample.empty is False:
+                try:
+                    # print(type(collection))
+                    weather_data = data_from_weather_api(collection,site_id, start_date, end_date)
+                    # logs_config.logger.info(f"length of weather_data:{len(weather_data)}")
 
-        # previous value of opening_KWh
-        sensor_df['prev_KWh'] = sensor_df['kWh'].shift(1)
-        sensor_df.dropna(inplace=True)
+                    if not weather_data.empty:
+                        # print(f"weather_data:{len(weather_data)}")
+                        weather_data['time'] = pd.to_datetime(weather_data['time'])
+                        weather_data.set_index('time', inplace=True)
 
-        if not sensor_df[sensor_df['prev_KWh'] > sensor_df['kWh']].empty:
-            print("prev kwh > kwh")
+                        weather_data = weather_data[~weather_data.index.duplicated(keep='first')]
+                        weather_data = weather_data.resample('15 min').ffill()
 
-        # consumed unit
-        sensor_df['consumed_unit'] = sensor_df['kWh'] - sensor_df['prev_KWh']
-        epsilon = 11
-        min_samples = 3
-        dbscan = DBSCAN(eps=epsilon, min_samples=min_samples)
-        sensor_df['db_outlier'] = dbscan.fit_predict(sensor_df[['consumed_unit']])
-        sensor_df.loc[sensor_df['db_outlier'] == -1, 'consumed_unit'] = np.nan
-        sensor_df.bfill(inplace=True)
-        sensor_df.drop(['kWh','prev_KWh','db_outlier'],axis=1, inplace= True)
-        # sensor_df.reset_index(inplace=True)
-
-        sensor_df_with_lags = add_lags(sensor_df)
-        final_df = create_features(sensor_df_with_lags)
-        final_df.fillna(0,inplace= True)
-        final_df.reset_index(inplace=True,drop=True)
-        return final_df
-    
-
+                        # Convert the creation_time columns to datetime if they are not already
+                        weather_data.reset_index(inplace=True)
+                        weather_data['creation_time'] = pd.to_datetime(weather_data['time'])
+                        # df2['creation_time'] = pd.to_datetime(df2['creation_time'])
+                        # return weather_data, df2
+                        merged_df = weather_data.merge(dfresample, on='creation_time', how="inner")
+                        # logger.info(f"columns in weather_data: {tuple(weather_data.columns)}")
+                        # logger.info(f"columns in merged_df: {tuple(merged_df.columns)}")
+                        # logger.info(f"columns in dfresample: {tuple(dfresample.columns)}")
+                        merged_df.drop(['time', '_id', 'site_id','creation_time_iso'],axis=1, inplace= True)
+                        # print(merged_df.head())
+                        return merged_df
+                    else:
+                        print("weather_data not found")
+                except Exception as e:
+                    print(e)
+            return None
     except Exception as e:
          print("error in kWh validation:",e,e.args)
 
@@ -223,60 +217,38 @@ def holidays_list(start_date, end_date):
 
 def get_database(client,database_name):
     try:
-        database = client.database_name 
-        return database
+        database = client[database_name] 
+        collection = database['weather_data']
+        return collection
     except Exception as e:
         print("error in fetching mongo database")
         raise e
         
-def weather_data_handling():
-    try:
-        weather_data = data_from_weather_api(site_id, start_date, end_date)
-        # logs_config.logger.info(f"length of weather_data:{len(weather_data)}")
 
-        if not weather_data.empty:
-            weather_data['time'] = pd.to_datetime(weather_data['time'])
-            weather_data.set_index('time', inplace=True)
-
-            weather_data = weather_data[~weather_data.index.duplicated(keep='first')]
-            weather_data = weather_data.resample('15 min').ffill()
-
-            # Convert the creation_time columns to datetime if they are not already
-            weather_data.reset_index(inplace=True)
-            weather_data['creation_time'] = pd.to_datetime(weather_data['time'])
-            # df2['creation_time'] = pd.to_datetime(df2['creation_time'])
-            # return weather_data, df2
-            merged_df = weather_data.merge(df2, on='creation_time', how="inner")
-            merged_df["sensor_id"] = sensor_id
-            mongo_dict = merged_df.to_dict(orient='records')
-    except Exception as e:
-        logger.info(f"error in weather_data_handling: {e}")
-
-db = get_database()
-def data_from_weather_api(site, startDate, endDate):
+def data_from_weather_api(collection,site, startDate, endDate):
     ''' Fetch weather data from CSV file based on date range'''
-
     # logger.info("Weather data fetching")
-    
     try:
         start_date = startDate.strftime('%Y-%m-%d %H:%M:%S')
         end_date = endDate.strftime('%Y-%m-%d %H:%M:%S')
+        # print(start_date,end_date)
         # conn = get_connection()
         # collection_name = os.getenv("weatherData")
-        loadProfile = db.weather_data
-
+        # loadProfile = db.weather_data
         documents = []
-        query = loadProfile.find({
+        query = collection.find({
             "site_id": site,
             "time": {
                 "$gte": start_date,
                 "$lte": end_date
             }
         })
+        # print(query)
         for doc in query:
             documents.append(doc)
         try:
             df = pd.DataFrame(documents)
+            # print(df.head())
             return df
         except Exception as e:
             print(e)
@@ -298,6 +270,7 @@ def label_encoding_decoding(df):
         json_string = json.dumps(json_data)
         with open('encoding_decoding_pair.json', 'w') as file:
             file.write(json_string)
-        df.drop('sensor_id',axis=1 ,inplace=True)
+        # df.drop('sensor_id',axis=1 ,inplace=True)
+        return df
     except Exception as e:
         logger.error("error in encoding_decoding: {e}")
