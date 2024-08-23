@@ -125,6 +125,7 @@ def parquet_data_transforamtion(data):
                     final_df_list.append(transformed_df)
                     # return transformed_df
         final_df = pd.concat(final_df_list)
+        logger.info(f"final dataset columns: {tuple(final_df.columns)}")
         return final_df
 
     except Exception as e:
